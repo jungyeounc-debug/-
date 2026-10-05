@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bookmark, Heart, Trash2, Share2, Compass, Calendar, RefreshCw, Database } from 'lucide-react';
+import { Bookmark, Heart, Trash2, Share2, Compass, Calendar } from 'lucide-react';
 import { DateCourse, SavedItem } from '../types';
 
 interface SavedFavoritesProps {
@@ -7,8 +7,6 @@ interface SavedFavoritesProps {
   onRemoveItem: (id: string) => void;
   onOpenGoogleChat: (message: string, title: string) => void;
   onViewCourseDetail?: (course: DateCourse) => void;
-  onRefresh?: () => void;
-  isRefreshing?: boolean;
 }
 
 export const SavedFavorites: React.FC<SavedFavoritesProps> = ({
@@ -16,8 +14,6 @@ export const SavedFavorites: React.FC<SavedFavoritesProps> = ({
   onRemoveItem,
   onOpenGoogleChat,
   onViewCourseDetail,
-  onRefresh,
-  isRefreshing,
 }) => {
   const courseItems = savedItems.filter((i) => i.type === 'course');
   const quoteItems = savedItems.filter((i) => i.type === 'quote');
@@ -44,36 +40,18 @@ export const SavedFavorites: React.FC<SavedFavoritesProps> = ({
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-neutral-200 gap-3">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <h2 className="text-xl font-bold text-neutral-900 flex items-center gap-2">
-              <Bookmark className="w-5 h-5 text-amber-500 fill-amber-500" />
-              <span>나만의 보관함</span>
-            </h2>
-            <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold flex items-center gap-1 border border-emerald-200">
-              <Database className="w-3 h-3 text-emerald-600" />
-              <span>백엔드 서버 동기화됨</span>
-            </span>
-          </div>
+          <h2 className="text-xl font-bold text-neutral-900 flex items-center gap-2">
+            <Bookmark className="w-5 h-5 text-amber-500 fill-amber-500" />
+            <span>나만의 보관함</span>
+          </h2>
           <p className="text-xs text-neutral-500">
-            백엔드 서버에 영구 보관된 감성 위로글과 데이트 코스를 언제든 다시 확인하고 Google Chat으로 공유하세요.
+            저장해둔 감성 위로글과 데이트 코스를 언제든 다시 확인하고 Google Chat으로 공유하세요.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
-          {onRefresh && (
-            <button
-              onClick={onRefresh}
-              disabled={isRefreshing}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-neutral-200 bg-white hover:bg-neutral-50 text-xs font-semibold text-neutral-600 transition disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-              <span>서버 새로고침</span>
-            </button>
-          )}
-          <span className="text-xs font-semibold px-2.5 py-1 bg-amber-100 text-amber-800 rounded-full">
-            총 {savedItems.length}개 보관
-          </span>
-        </div>
+        <span className="text-xs font-semibold px-2.5 py-1 bg-amber-100 text-amber-800 rounded-full self-start sm:self-auto">
+          총 {savedItems.length}개 보관
+        </span>
       </div>
 
       {savedItems.length === 0 ? (
@@ -81,9 +59,9 @@ export const SavedFavorites: React.FC<SavedFavoritesProps> = ({
           <div className="w-16 h-16 rounded-3xl bg-amber-100 text-amber-600 flex items-center justify-center mx-auto">
             <Bookmark className="w-8 h-8" />
           </div>
-          <h3 className="text-lg font-bold text-neutral-800">서버 보관함이 비어있습니다</h3>
+          <h3 className="text-lg font-bold text-neutral-800">보관함이 비어있습니다</h3>
           <p className="text-xs text-neutral-500 leading-relaxed">
-            감성 상담소에서 마음에 드는 위로 문장을 저장하거나, 실시간 데이트 코스에서 추천받은 일정을 북마크하면 백엔드 서버에 안전하게 보관됩니다.
+            감성 상담소에서 마음에 드는 위로 문장을 저장하거나, 실시간 데이트 코스에서 추천받은 일정을 북마크하면 브라우저에 안전하게 보관됩니다.
           </p>
         </div>
       ) : (
@@ -146,7 +124,7 @@ export const SavedFavorites: React.FC<SavedFavoritesProps> = ({
                         <button
                           onClick={() => onRemoveItem(item.id)}
                           className="text-neutral-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-neutral-100 transition"
-                          title="서버에서 삭제"
+                          title="삭제"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -204,7 +182,7 @@ export const SavedFavorites: React.FC<SavedFavoritesProps> = ({
                       <button
                         onClick={() => onRemoveItem(item.id)}
                         className="text-neutral-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-white/60 transition"
-                        title="서버에서 삭제"
+                        title="삭제"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>

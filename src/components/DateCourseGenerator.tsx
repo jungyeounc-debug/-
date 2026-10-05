@@ -15,10 +15,12 @@ import {
   Users,
   Lightbulb,
   History,
-  Database,
 } from 'lucide-react';
 import { DateCourse } from '../types';
-import { apiSaveCourseHistory, apiFetchCourseHistory } from '../services/backendApi';
+import {
+  getCourseHistoryFromStorage,
+  saveCourseToHistoryInStorage,
+} from '../services/storageService';
 
 interface DateCourseGeneratorProps {
   user: User | null;
@@ -67,23 +69,16 @@ export const DateCourseGenerator: React.FC<DateCourseGeneratorProps> = ({
   const [copied, setCopied] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Backend Course History
+  // Course History stored in localStorage
   const [historyList, setHistoryList] = useState<DateCourse[]>([]);
   const [showHistory, setShowHistory] = useState<boolean>(false);
 
   const regionToUse = customRegion.trim() ? customRegion.trim() : selectedRegion;
 
-  // Load course history from backend server
+  // Load course history from browser localStorage
   useEffect(() => {
-    async function loadHistory() {
-      try {
-        const list = await apiFetchCourseHistory(user);
-        setHistoryList(list);
-      } catch (e) {
-        console.error('Failed to load course history:', e);
-      }
-    }
-    loadHistory();
+    const list = getCourseHistoryFromStorage(user);
+    setHistoryList(list);
   }, [user]);
 
   const handleGenerate = async () => {
@@ -91,6 +86,7 @@ export const DateCourseGenerator: React.FC<DateCourseGeneratorProps> = ({
     setErrorMsg(null);
 
     try {
+      // Calls Vercel Serverless Function /api/date-course/recommend
       const response = await fetch('/api/date-course/recommend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -105,7 +101,8 @@ export const DateCourseGenerator: React.FC<DateCourseGeneratorProps> = ({
       });
 
       if (!response.ok) {
-        throw new Error('데이트 코스 추천 생성에 실패했습니다.');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `데이트 코스 추천 생성 실패 (${response.status})`);
       }
 
       const data = await response.json();
@@ -116,9 +113,8 @@ export const DateCourseGenerator: React.FC<DateCourseGeneratorProps> = ({
       };
       setCourse(generatedCourse);
 
-      // Auto-save to backend history
-      await apiSaveCourseHistory(user, generatedCourse);
-      const updatedList = await apiFetchCourseHistory(user);
+      // Save to localStorage history
+      const updatedList = saveCourseToHistoryInStorage(user, generatedCourse);
       setHistoryList(updatedList);
     } catch (err: unknown) {
       console.error('Course recommendation error:', err);
@@ -189,7 +185,7 @@ export const DateCourseGenerator: React.FC<DateCourseGeneratorProps> = ({
             className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-neutral-300 bg-white hover:bg-neutral-50 text-xs font-semibold text-neutral-700 shadow-2xs transition"
           >
             <History className="w-4 h-4 text-rose-500" />
-            <span>서버 코스 이력 ({historyList.length})</span>
+            <span>이전 코스 이력 ({historyList.length})</span>
           </button>
         )}
       </div>
@@ -199,8 +195,8 @@ export const DateCourseGenerator: React.FC<DateCourseGeneratorProps> = ({
         <div className="bg-white rounded-3xl p-5 border border-rose-200 shadow-xs space-y-3 animate-in fade-in">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold text-neutral-800 flex items-center gap-1.5">
-              <Database className="w-3.5 h-3.5 text-emerald-600" />
-              <span>백엔드 서버에 저장된 이전 코스 이력</span>
+              <History className="w-3.5 h-3.5 text-rose-600" />
+              <span>최근 추천받은 데이트 코스</span>
             </h3>
             <span className="text-[11px] text-neutral-400">클릭하여 화면에 다시 로드</span>
           </div>
@@ -409,7 +405,7 @@ export const DateCourseGenerator: React.FC<DateCourseGeneratorProps> = ({
             {isLoading ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>최적의 코스를 탐색하고 백엔드 서버에 저장 준비 중...</span>
+                <span>AI가 최적의 코스를 실시간 탐색 중입니다...</span>
               </>
             ) : (
               <>
@@ -439,10 +435,6 @@ export const DateCourseGenerator: React.FC<DateCourseGeneratorProps> = ({
                 </span>
                 <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-xs font-semibold">
                   📍 {course.region}
-                </span>
-                <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-xs font-semibold flex items-center gap-1">
-                  <Database className="w-3 h-3" />
-                  서버 저장됨
                 </span>
               </div>
               <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight">
@@ -589,7 +581,7 @@ export const DateCourseGenerator: React.FC<DateCourseGeneratorProps> = ({
                     isSaved && isSaved(course.id) ? 'fill-rose-600 text-rose-600' : ''
                   }`}
                 />
-                <span>{isSaved && isSaved(course.id) ? '보관함 저장됨' : '보관함 저장 (서버 동기화)'}</span>
+                <span>{isSaved && isSaved(course.id) ? '보관함 저장됨' : '보관함 저장'}</span>
               </button>
 
               <button

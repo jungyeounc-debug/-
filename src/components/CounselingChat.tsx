@@ -13,14 +13,14 @@ import {
   Smile,
   Coffee,
   HelpCircle,
-  Database,
+  HardDrive,
 } from 'lucide-react';
 import { ChatMessage, Persona, PersonaId } from '../types';
 import {
-  apiFetchChatSession,
-  apiSaveChatSession,
-  apiClearChatSession,
-} from '../services/backendApi';
+  getChatSessionFromStorage,
+  saveChatSessionToStorage,
+  clearChatSessionInStorage,
+} from '../services/storageService';
 
 interface CounselingChatProps {
   user: User | null;
@@ -79,7 +79,6 @@ export const CounselingChat: React.FC<CounselingChatProps> = ({
   const [currentMood, setCurrentMood] = useState<string>('외로움');
   const [inputMessage, setInputMessage] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [isBackendSaving, setIsBackendSaving] = useState<boolean>(false);
   const [emotionalTemperature, setEmotionalTemperature] = useState<number>(65);
   const [detectedEmotion, setDetectedEmotion] = useState<string>('따뜻한 시작');
   const [latestComfortQuote, setLatestComfortQuote] = useState<string>(
@@ -108,51 +107,34 @@ export const CounselingChat: React.FC<CounselingChatProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const activePersonaObj = PERSONAS.find((p) => p.id === selectedPersona) || PERSONAS[0];
 
-  // Load chat session from backend server when persona or user changes
+  // Load chat session from browser localStorage
   useEffect(() => {
-    let isCancelled = false;
-
-    async function loadServerSession() {
-      try {
-        const session = await apiFetchChatSession(user, selectedPersona);
-        if (isCancelled) return;
-
-        if (session && session.messages && session.messages.length > 0) {
-          setMessages(session.messages);
-          if (session.emotionalTemperature !== undefined) {
-            setEmotionalTemperature(session.emotionalTemperature);
-          }
-          if (session.detectedEmotion) {
-            setDetectedEmotion(session.detectedEmotion);
-          }
-        } else {
-          // Default initial greeting for this persona
-          setMessages([
-            {
-              id: 'welcome-' + selectedPersona,
-              role: 'model',
-              text: `안녕하세요! ${activePersonaObj.name}입니다.\n${activePersonaObj.description}`,
-              timestamp: '방금 전',
-              emotionalTemperature: 65,
-              detectedEmotion: '환영 대화',
-              comfortQuote: '오늘 하루도 당신은 그 자체로 충분히 아름답습니다.',
-              followUpQuestions: [
-                '오늘 있었던 일 중 가장 기억에 남는 순간은 무엇인가요?',
-                '지금 마음 상태를 자유롭게 이야기해주세요.',
-              ],
-            },
-          ]);
-        }
-      } catch (e) {
-        console.error('Failed to load session from backend:', e);
+    const session = getChatSessionFromStorage(user, selectedPersona);
+    if (session && session.messages && session.messages.length > 0) {
+      setMessages(session.messages);
+      if (session.emotionalTemperature !== undefined) {
+        setEmotionalTemperature(session.emotionalTemperature);
       }
+      if (session.detectedEmotion) {
+        setDetectedEmotion(session.detectedEmotion);
+      }
+    } else {
+      setMessages([
+        {
+          id: 'welcome-' + selectedPersona,
+          role: 'model',
+          text: `안녕하세요! ${activePersonaObj.name}입니다.\n${activePersonaObj.description}`,
+          timestamp: '방금 전',
+          emotionalTemperature: 65,
+          detectedEmotion: '환영 대화',
+          comfortQuote: '오늘 하루도 당신은 그 자체로 충분히 아름답습니다.',
+          followUpQuestions: [
+            '오늘 있었던 일 중 가장 기억에 남는 순간은 무엇인가요?',
+            '지금 마음 상태를 자유롭게 이야기해주세요.',
+          ],
+        },
+      ]);
     }
-
-    loadServerSession();
-
-    return () => {
-      isCancelled = true;
-    };
   }, [selectedPersona, user]);
 
   useEffect(() => {
@@ -185,6 +167,7 @@ export const CounselingChat: React.FC<CounselingChatProps> = ({
     setIsLoading(true);
 
     try {
+      // Calls Vercel Serverless API /api/chat/counsel
       const response = await fetch('/api/chat/counsel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -196,7 +179,8 @@ export const CounselingChat: React.FC<CounselingChatProps> = ({
       });
 
       if (!response.ok) {
-        throw new Error('상담 서버 응답 오류가 발생했습니다.');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `상담 응답 생성 실패 (${response.status})`);
       }
 
       const data = await response.json();
@@ -227,10 +211,8 @@ export const CounselingChat: React.FC<CounselingChatProps> = ({
         setLatestComfortQuote(data.comfortQuote);
       }
 
-      // Auto-save session to backend server
-      setIsBackendSaving(true);
-      await apiSaveChatSession(user, selectedPersona, updatedHistory, newTemp, newEmotion);
-      setIsBackendSaving(false);
+      // Save to browser localStorage
+      saveChatSessionToStorage(user, selectedPersona, updatedHistory, newTemp, newEmotion);
     } catch (err: unknown) {
       console.error('Chat error:', err);
       const errorMsg: ChatMessage = {
@@ -275,12 +257,12 @@ export const CounselingChat: React.FC<CounselingChatProps> = ({
     window.speechSynthesis.speak(utterance);
   };
 
-  const handleResetChat = async () => {
-    if (window.confirm('서버에 저장된 이 페르소나와의 대화 내용을 초기화하시겠습니까?')) {
+  const handleResetChat = () => {
+    if (window.confirm('이 페르소나와의 대화 기록을 초기화하시겠습니까?')) {
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
       }
-      await apiClearChatSession(user, selectedPersona);
+      clearChatSessionInStorage(user, selectedPersona);
 
       const resetMsg: ChatMessage = {
         id: 'welcome-msg-' + Date.now(),
@@ -295,7 +277,7 @@ export const CounselingChat: React.FC<CounselingChatProps> = ({
       setMessages([resetMsg]);
       setEmotionalTemperature(60);
       setDetectedEmotion('새로운 시작');
-      await apiSaveChatSession(user, selectedPersona, [resetMsg], 60, '새로운 시작');
+      saveChatSessionToStorage(user, selectedPersona, [resetMsg], 60, '새로운 시작');
     }
   };
 
@@ -312,7 +294,7 @@ export const CounselingChat: React.FC<CounselingChatProps> = ({
             </h2>
             <button
               onClick={handleResetChat}
-              title="대화 초기화 및 서버 데이터 삭제"
+              title="대화 초기화"
               className="text-xs text-neutral-400 hover:text-neutral-700 flex items-center gap-1 transition"
             >
               <RefreshCw className="w-3 h-3" />
@@ -400,7 +382,7 @@ export const CounselingChat: React.FC<CounselingChatProps> = ({
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => onSaveQuote('토닥토닥 위로글', latestComfortQuote)}
-                  title="백엔드 보관함에 저장"
+                  title="보관함에 저장"
                   className="p-1 rounded-md text-neutral-400 hover:text-amber-600 hover:bg-amber-50 transition"
                 >
                   <Heart className="w-3.5 h-3.5" />
@@ -469,9 +451,9 @@ export const CounselingChat: React.FC<CounselingChatProps> = ({
           </div>
 
           <div className="flex items-center gap-2 text-xs text-neutral-500">
-            <div className="hidden sm:flex items-center gap-1 text-[11px] text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200">
-              <Database className="w-3 h-3 text-emerald-600" />
-              <span>{isBackendSaving ? '서버 동기화 중...' : '백엔드 자동 저장'}</span>
+            <div className="hidden sm:flex items-center gap-1 text-[11px] text-neutral-600 bg-neutral-100 px-2.5 py-1 rounded-lg">
+              <HardDrive className="w-3 h-3 text-neutral-500" />
+              <span>기록 자동 보관</span>
             </div>
             <Coffee className="w-3.5 h-3.5 text-amber-500 hidden sm:block" />
           </div>
